@@ -36,22 +36,46 @@ metadata:
 data:
   listen-jboss.sh: |
     #!/bin/sh
+    # Listen for JBoss JGroups cluster messages using Python
+    # Note: Using Python instead of socat due to socat 1.8.x bug with ip-add-membership
     MULTICAST_ADDR="${MULTICAST_ADDR:-224.0.1.105}"
     MULTICAST_PORT="${MULTICAST_PORT:-45688}"
     LOCAL_IP=$(ip -4 addr show eth0 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]}' | head -1)
     echo "Starting JBoss-style multicast receiver..."
     echo "Listening on: $MULTICAST_ADDR:$MULTICAST_PORT (interface: $LOCAL_IP)"
     echo "Waiting for messages..."
-    exec socat -u "UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:${LOCAL_IP},reuseaddr,fork" \
-      SYSTEM:'echo "[$(date)] Received:" && cat && echo ""'
+    exec python3 -c "
+    import socket, struct
+    from datetime import datetime
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('', $MULTICAST_PORT))
+    mreq = struct.pack('4sl', socket.inet_aton('$MULTICAST_ADDR'), socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    while True:
+        data, addr = sock.recvfrom(4096)
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f'[{ts}] From {addr}: {data.decode()}')
+    "
   
   listen-raw.sh: |
     #!/bin/sh
-    MULTICAST_ADDR="${1:-224.0.1.105}"
-    MULTICAST_PORT="${2:-45688}"
+    # Simple raw multicast listener using Python
+    MULTICAST_ADDR="${1:-${MULTICAST_ADDR:-224.0.1.105}}"
+    MULTICAST_PORT="${2:-${MULTICAST_PORT:-45688}}"
     LOCAL_IP=$(ip -4 addr show eth0 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]}' | head -1)
     echo "Listening on $MULTICAST_ADDR:$MULTICAST_PORT (interface: $LOCAL_IP)..."
-    exec socat -u "UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:${LOCAL_IP},reuseaddr,fork" -
+    exec python3 -c "
+    import socket, struct
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('', $MULTICAST_PORT))
+    mreq = struct.pack('4sl', socket.inet_aton('$MULTICAST_ADDR'), socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    while True:
+        data, addr = sock.recvfrom(4096)
+        print(data.decode(), end='')
+    "
   
   tcpdump-multicast.sh: |
     #!/bin/bash
@@ -61,4 +85,3 @@ data:
     echo "Capturing multicast traffic to $MULTICAST_ADDR..."
     echo "Press Ctrl+C to stop"
     tcpdump -i any host $MULTICAST_ADDR -vv -n
-

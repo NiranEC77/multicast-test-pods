@@ -5,7 +5,9 @@ LABEL org.opencontainers.image.description="Multicast receiver for JBoss/JGroups
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Install required packages
+# Note: Using Python for multicast receiving due to socat 1.8.x bug with ip-add-membership
 RUN apk add --no-cache \
+    python3 \
     socat \
     iproute2 \
     iputils \

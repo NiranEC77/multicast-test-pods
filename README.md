@@ -14,6 +14,7 @@ Container images and Kubernetes manifests for testing multicast communication, c
 ⚠️ **Important**: Multicast must be enabled in your Kubernetes cluster/CNI. Not all CNI plugins support multicast by default.
 
 ### CNI Plugins that support Multicast:
+- **Antrea**: Native multicast support (recommended for VMware environments)
 - **Calico**: Requires `ipip` mode or proper configuration
 - **Flannel**: Works with VXLAN backend
 - **Weave Net**: Native multicast support
@@ -38,11 +39,11 @@ kubectl get pods -l app=multicast-test
 # Exec into receiver pod
 kubectl exec -it multicast-receiver -- /bin/bash
 
-# Start listening for multicast messages
-socat UDP4-RECVFROM:45688,ip-add-membership=224.0.1.105:0.0.0.0,fork -
-
-# Or use the built-in script with timestamps
+# Start listening for multicast messages (with timestamps)
 /opt/multicast/listen-jboss.sh
+
+# Or use raw listener
+/opt/multicast/listen-raw.sh
 ```
 
 ### 3. Send from Transmitter (Terminal 2)
@@ -114,6 +115,12 @@ docker push ghcr.io/niranec77/multicast-transmitter:latest
 docker push ghcr.io/niranec77/multicast-receiver:latest
 ```
 
+## Technical Notes
+
+### Why Python instead of socat for receiving?
+
+The receiver uses Python for multicast group membership due to a bug in socat 1.8.x where the `ip-add-membership` option incorrectly parses environment variables as interface names. The transmitter still uses socat for sending (which works correctly).
+
 ## Troubleshooting
 
 ### No messages received?
@@ -155,8 +162,8 @@ kubectl exec -it multicast-receiver -- ping -c 3 $TX_IP
 - `send-single.sh [ADDR] [PORT] [MSG]` - Send single message
 
 ### Receiver (`/opt/multicast/`)
-- `listen-jboss.sh` - Listen with timestamps
-- `listen-raw.sh [ADDR] [PORT]` - Raw listener
+- `listen-jboss.sh` - Listen with timestamps (uses Python)
+- `listen-raw.sh [ADDR] [PORT]` - Raw listener (uses Python)
 - `tcpdump-multicast.sh [ADDR]` - Capture traffic
 
 ## Cleanup
