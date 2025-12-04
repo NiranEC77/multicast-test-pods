@@ -35,30 +35,23 @@ metadata:
   name: multicast-receiver-scripts
 data:
   listen-jboss.sh: |
-    #!/bin/bash
-    # Listen for JBoss JGroups cluster messages
+    #!/bin/sh
     MULTICAST_ADDR="${MULTICAST_ADDR:-224.0.1.105}"
     MULTICAST_PORT="${MULTICAST_PORT:-45688}"
-    # Get the primary interface IP
-    LOCAL_IP=$(ip -4 addr show eth0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
-    [ -z "$LOCAL_IP" ] && LOCAL_IP=$(hostname -i 2>/dev/null | awk '{print $1}')
-    [ -z "$LOCAL_IP" ] && LOCAL_IP="0.0.0.0"
+    LOCAL_IP=$(ip -4 addr show eth0 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]}' | head -1)
     echo "Starting JBoss-style multicast receiver..."
     echo "Listening on: $MULTICAST_ADDR:$MULTICAST_PORT (interface: $LOCAL_IP)"
     echo "Waiting for messages..."
-    socat -u UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:${LOCAL_IP},reuseaddr,fork \
-      SYSTEM:'echo "[$(date -Iseconds)] Received:" && cat && echo ""'
+    exec socat -u "UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:${LOCAL_IP},reuseaddr,fork" \
+      SYSTEM:'echo "[$(date)] Received:" && cat && echo ""'
   
   listen-raw.sh: |
-    #!/bin/bash
-    # Simple raw listener
+    #!/bin/sh
     MULTICAST_ADDR="${1:-224.0.1.105}"
     MULTICAST_PORT="${2:-45688}"
-    LOCAL_IP=$(ip -4 addr show eth0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
-    [ -z "$LOCAL_IP" ] && LOCAL_IP=$(hostname -i 2>/dev/null | awk '{print $1}')
-    [ -z "$LOCAL_IP" ] && LOCAL_IP="0.0.0.0"
+    LOCAL_IP=$(ip -4 addr show eth0 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]}' | head -1)
     echo "Listening on $MULTICAST_ADDR:$MULTICAST_PORT (interface: $LOCAL_IP)..."
-    socat -u UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:${LOCAL_IP},reuseaddr,fork -
+    exec socat -u "UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:${LOCAL_IP},reuseaddr,fork" -
   
   tcpdump-multicast.sh: |
     #!/bin/bash
