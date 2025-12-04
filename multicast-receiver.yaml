@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multicast-receiver
+  labels:
+    app: multicast-test
+    role: receiver
+spec:
+  containers:
+  - name: receiver
+    image: ghcr.io/niranec77/multicast-receiver:latest
+    env:
+    - name: MULTICAST_ADDR
+      value: "224.0.1.105"
+    - name: MULTICAST_PORT
+      value: "45688"
+    securityContext:
+      capabilities:
+        add:
+        - NET_ADMIN
+        - NET_RAW
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+---
+# ConfigMap with receiver test scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multicast-receiver-scripts
+data:
+  listen-jboss.sh: |
+    #!/bin/bash
+    # Listen for JBoss JGroups cluster messages
+    MULTICAST_ADDR="${MULTICAST_ADDR:-224.0.1.105}"
+    MULTICAST_PORT="${MULTICAST_PORT:-45688}"
+    
+    echo "Starting JBoss-style multicast receiver..."
+    echo "Listening on: $MULTICAST_ADDR:$MULTICAST_PORT"
+    echo "Waiting for messages..."
+    echo ""
+    
+    socat UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:0.0.0.0,fork \
+      SYSTEM:'echo "[$(date -Iseconds)] Received:" && cat && echo ""'
+  
+  listen-raw.sh: |
+    #!/bin/bash
+    # Simple raw listener
+    MULTICAST_ADDR="${1:-224.0.1.105}"
+    MULTICAST_PORT="${2:-45688}"
+    
+    echo "Listening on $MULTICAST_ADDR:$MULTICAST_PORT..."
+    socat UDP4-RECVFROM:${MULTICAST_PORT},ip-add-membership=${MULTICAST_ADDR}:0.0.0.0,fork -
+  
+  tcpdump-multicast.sh: |
+    #!/bin/bash
+    # Capture all multicast traffic
+    MULTICAST_ADDR="${1:-224.0.1.105}"
+    
+    echo "Capturing multicast traffic to $MULTICAST_ADDR..."
+    echo "Press Ctrl+C to stop"
+    tcpdump -i any host $MULTICAST_ADDR -vv -n
+
