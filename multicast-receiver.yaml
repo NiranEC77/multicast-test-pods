@@ -9,6 +9,7 @@ spec:
   containers:
   - name: receiver
     image: ghcr.io/niranec77/multicast-receiver:latest
+    imagePullPolicy: Always
     env:
     - name: MULTICAST_ADDR
       value: "224.0.1.105"
